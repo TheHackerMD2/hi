@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale: 1.0">
+    <title>Enhanced 3D Minecraft-like World Generation</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        .bar {
+            display: flex;
+            margin-bottom: 5px;
+        }
+        .heart, .hunger {
+            width: 20px;
+            height: 20px;
+            background-color: red;
+            margin-right: 2px;
+        }
+        .hunger { background-color: orange; }
+        #crosshair {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        #crosshair div {
+            position: absolute;
+            background-color: white;
+        }
+        #crosshair .horizontal {
+            width: 20px;
+            height: 2px;
+            top: 9px;
+            left: 0;
+        }
+        #crosshair .vertical {
+            width: 2px;
+            height: 20px;
+            top: 0;
+            left: 9px;
+        }
+    </style>
+</head>
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/simplex-noise@2.4.0/simplex-noise.min.js"></script>
+    <div id="hud">
+        <div id="health-bar" class="bar"></div>
+        <div id="hunger-bar" class="bar"></div>
+    </div>
+    <div id="crosshair">
+        <div class="horizontal"></div>
+        <div class="vertical"></div>
+    </div>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const light = new THREE.AmbientLight(0xffffff);
+        scene.add(light);
+
+        // World generation parameters
+        const chunkSize = 16;
+        const worldHeight = 64;
+        const blockSize = 1;
+        const groundLevel = 5;  // Ensuring the ground is not at the bottom of the world (to avoid void)
+
+        const simplex = new SimplexNoise();
+
+        // Biome Types
+        const blockTypes = {
+            GRASS: 0x7CFC00,
+            DIRT: 0x9E7D3B,
+            STONE: 0x808080,
+            SAND: 0xC2B280,
+            SNOW: 0xFFFFFF,
+            WATER: 0x1E90FF,
+            TREE_TRUNK: 0x8B4513,
+            LEAVES: 0x228B22
+        };
+
+        // Noise-based world generation
+        function perlinNoise(x, y) {
+            return simplex.noise2D(x * 0.1, y * 0.1);
+        }
+
+        // Generate terrain with biomes
+        function generateChunk(chunkX, chunkZ) {
+            const geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
+            const blocks = [];
+            for (let x = 0; x < chunkSize; x++) {
+                for (let z = 0; z < chunkSize; z++) {
+                    const worldX = chunkX * chunkSize + x;
+                    const worldZ = chunkZ * chunkSize + z;
+                    const height = Math.floor(perlinNoise(worldX, worldZ) * worldHeight + groundLevel);
+                    const biomeType = perlinNoise(worldX, worldZ) > 0.5 ? 'forest' : 'desert';
+
+                    // Generate blocks for the chunk
+                    for (let y = 0; y < height; y++) {
+                        let color = blockTypes.STONE;
+                        if (y === height - 1) {
+                            color = biomeType === 'forest' ? blockTypes.GRASS : blockTypes.SAND;
+                        } else if (y < height - 4) {
+                            color = blockTypes.DIRT;
+                        }
+
+                        const material = new THREE.MeshBasicMaterial({ color });
+                        const block = new THREE.Mesh(geometry, material);
+                        block.position.set(worldX, y, worldZ);
+                        scene.add(block);
+                    }
+
+                    // Generate trees in forest biome
+                    if (biomeType === 'forest' && Math.random() < 0.05) {
+                        generateTree(worldX, height, worldZ);
+                    }
+
+                    // Generate water in desert biome
+                    if (biomeType === 'desert' && Math.random() < 0.02) {
+                        generateWater(worldX, height - 1, worldZ);
+                    }
+                }
+            }
+        }
+
+        // Function to generate trees (simple version)
+        function generateTree(x, y, z) {
+            const trunkGeometry = new THREE.BoxGeometry(1, 4, 1);
+            const trunkMaterial = new THREE.MeshBasicMaterial({ color: blockTypes.TREE_TRUNK });
+            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+            trunk.position.set(x, y, z);
+            scene.add(trunk);
+
+            const leavesGeometry = new THREE.BoxGeometry(3, 3, 3);
+            const leavesMaterial = new THREE.MeshBasicMaterial({ color: blockTypes.LEAVES });
+            const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+            leaves.position.set(x, y + 2, z);
+            scene.add(leaves);
+        }
+
+        // Function to generate water (simple version)
+        function generateWater(x, y, z) {
+            const waterGeometry = new THREE.BoxGeometry(1, 1, 1);
+            const waterMaterial = new THREE.MeshBasicMaterial({ color: blockTypes.WATER });
+            const water = new THREE.Mesh(waterGeometry, waterMaterial);
+            water.position.set(x, y, z);
+            scene.add(water);
+        }
+
+        // Player setup
+        camera.position.y = 2;  // Ensure the player is above the ground level
+        const player = { speed: 0.1, health: 10, hunger: 10 };
+
+        // Health and hunger bars
+        const healthBar = document.getElementById('health-bar');
+        const hungerBar = document.getElementById('hunger-bar');
+        function updateBars() {
+            healthBar.innerHTML = '';
+            hungerBar.innerHTML = '';
+            for (let i = 0; i < player.health; i++) {
+                const heart = document.createElement('div');
+                heart.className = 'heart';
+                healthBar.appendChild(heart);
+            }
+            for (let i = 0; i < player.hunger; i++) {
+                const hunger = document.createElement('div');
+                hunger.className = 'hunger';
+                hungerBar.appendChild(hunger);
+            }
+        }
+
+        // Mouse control setup
+        let pitch = 0;
+        let yaw = 0;
+        const mouseSensitivity = 0.003;
+
+        // Lock the pointer and control camera
+        document.body.addEventListener('click', () => {
+            document.body.requestPointerLock();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement === document.body) {
+                yaw -= e.movementX * mouseSensitivity;
+                pitch -= e.movementY * mouseSensitivity;
+                pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+                camera.rotation.set(pitch, yaw, 0);
+            }
+        });
+
+        // Player movement
+        const keys = {};
+        window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+        window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
+
+        function movePlayer() {
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
+            direction.y = 0;
+            direction.normalize();
+
+            if (keys['w']) camera.position.addScaledVector(direction, player.speed);
+            if (keys['s']) camera.position.addScaledVector(direction, -player.speed);
+            if (keys['a']) {
+                const left = new THREE.Vector3().crossVectors(camera.up, direction).normalize();
+                camera.position.addScaledVector(left, player.speed);
+            }
+            if (keys['d']) {
+                const right = new THREE.Vector3().crossVectors(direction, camera.up).normalize();
+                camera.position.addScaledVector(right, player.speed);
+            }
+        }
+
+        // Game loop
+        function animate() {
+            requestAnimationFrame(animate);
+            movePlayer();
+            updateBars();
+            renderer.render(scene, camera);
+        }
+
+        // Generate initial world
+        generateChunk(0, 0); 
+        generateChunk(1, 0); 
+        generateChunk(0, 1); 
+
+        updateBars();
+        animate();
+    </script>
+</body>
+</html>
