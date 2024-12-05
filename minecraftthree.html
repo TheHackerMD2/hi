@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Minecraft-like Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #ADD8E6; }
+        canvas { display: block; }
+
+        #crosshair {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        #crosshair div {
+            position: absolute;
+            background-color: white;
+        }
+        #crosshair .horizontal {
+            width: 20px;
+            height: 2px;
+            top: 9px;
+            left: 0;
+        }
+        #crosshair .vertical {
+            width: 2px;
+            height: 20px;
+            top: 0;
+            left: 9px;
+        }
+
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        .bar {
+            display: flex;
+            margin-bottom: 5px;
+        }
+        .heart, .hunger {
+            width: 20px;
+            height: 20px;
+            background-color: red;
+            margin-right: 2px;
+        }
+        .hunger { background-color: orange; }
+        .hotbar {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            display: flex;
+        }
+        .hotbar-item {
+            width: 40px;
+            height: 40px;
+            background-color: #333;
+            margin-right: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid white;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/simplex-noise@2.4.0/simplex-noise.min.js"></script>
+
+    <div id="crosshair">
+        <div class="horizontal"></div>
+        <div class="vertical"></div>
+    </div>
+
+    <div id="hud">
+        <div id="health-bar" class="bar"></div>
+        <div id="hunger-bar" class="bar"></div>
+    </div>
+
+    <div id="hotbar" class="hotbar"></div>
+
+    <script>
+        // Setup scene, camera, and renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const light = new THREE.AmbientLight(0xffffff); 
+        scene.add(light);
+
+        // World generation parameters
+        const chunkSize = 16;
+        const worldHeight = 64;
+        const blockSize = 1;
+        const groundLevel = 5;
+
+        const simplex = new SimplexNoise();
+
+        // Block types (all blocks are light blue)
+        const blockTypes = {
+            GRASS: 0xADD8E6,
+            DIRT: 0xADD8E6,
+            STONE: 0xADD8E6,
+            SAND: 0xADD8E6,
+            SNOW: 0xADD8E6,
+            WATER: 0xADD8E6,
+            TREE_TRUNK: 0xADD8E6,
+            LEAVES: 0xADD8E6
+        };
+
+        // Perlin Noise for terrain generation
+        function perlinNoise(x, y) {
+            return simplex.noise2D(x * 0.1, y * 0.1);
+        }
+
+        // Generate terrain and world
+        function generateChunk(chunkX, chunkZ) {
+            const geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
+            const blocks = [];
+            for (let x = 0; x < chunkSize; x++) {
+                for (let z = 0; z < chunkSize; z++) {
+                    const worldX = chunkX * chunkSize + x;
+                    const worldZ = chunkZ * chunkSize + z;
+                    const height = Math.floor(perlinNoise(worldX, worldZ) * worldHeight + groundLevel);
+
+                    for (let y = 0; y < height; y++) {
+                        let color = blockTypes.STONE;
+                        if (y === height - 1) {
+                            color = blockTypes.GRASS;
+                        } else if (y < height - 4) {
+                            color = blockTypes.DIRT;
+                        }
+
+                        const material = new THREE.MeshBasicMaterial({ color });
+                        const block = new THREE.Mesh(geometry, material);
+                        block.position.set(worldX, y, worldZ);
+                        scene.add(block);
+                    }
+
+                    if (Math.random() < 0.05) {
+                        generateTree(worldX, height, worldZ);
+                    }
+                }
+            }
+        }
+
+        // Create tree
+        function generateTree(x, y, z) {
+            const trunkGeometry = new THREE.BoxGeometry(1, 4, 1);
+            const trunkMaterial = new THREE.MeshBasicMaterial({ color: blockTypes.TREE_TRUNK });
+            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+            trunk.position.set(x, y, z);
+            scene.add(trunk);
+
+            const leavesGeometry = new THREE.BoxGeometry(3, 3, 3);
+            const leavesMaterial = new THREE.MeshBasicMaterial({ color: blockTypes.LEAVES });
+            const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+            leaves.position.set(x, y + 2, z);
+            scene.add(leaves);
+        }
+
+        // Player setup
+        const player = {
+            health: 10,
+            hunger: 10,
+            position: new THREE.Vector3(0, 2, 0),
+            speed: 0.1,
+            attackStrength: 2,
+            isAttacking: false,
+            inventory: [],
+            currentBlock: blockTypes.STONE,
+            velocityY: 0
+        };
+
+        // Health and hunger UI
+        const healthBar = document.getElementById('health-bar');
+        const hungerBar = document.getElementById('hunger-bar');
+        function updateBars() {
+            healthBar.innerHTML = '';
+            hungerBar.innerHTML = '';
+            for (let i = 0; i < player.health; i++) {
+                const heart = document.createElement('div');
+                heart.className = 'heart';
+                healthBar.appendChild(heart);
+            }
+            for (let i = 0; i < player.hunger; i++) {
+                const hunger = document.createElement('div');
+                hunger.className = 'hunger';
+                hungerBar.appendChild(hunger);
+            }
+        }
+
+        // Hotbar setup
+        function updateHotbar() {
+            const hotbarContainer = document.getElementById('hotbar');
+            hotbarContainer.innerHTML = ''; // Clear the hotbar
+            player.inventory.forEach((item, index) => {
+                const itemElement = document.createElement('div');
+                itemElement.className = 'hotbar-item';
+                itemElement.style.backgroundColor = item.color;
+                itemElement.addEventListener('click', () => {
+                    player.currentBlock = item.type;
+                });
+                hotbarContainer.appendChild(itemElement);
+            });
+        }
+
+        // Create initial inventory
+        function createInventory() {
+            player.inventory = [
+                { type: blockTypes.STONE, color: '#ADD8E6' },
+                { type: blockTypes.DIRT, color: '#ADD8E6' },
+                { type: blockTypes.GRASS, color: '#ADD8E6' },
+                { type: blockTypes.SAND, color: '#ADD8E6' },
+            ];
+        }
+
+        // Block breaking and placing
+        let selectedBlock = null;
+
+        function updateBlockInteraction(event) {
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2(
+                (event.clientX / window.innerWidth) * 2 - 1,
+                -(event.clientY / window.innerHeight) * 2 + 1
+            );
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObjects(scene.children);
+
+            if (intersects.length > 0) {
+                selectedBlock = intersects[0].object;
+                if (event.type === 'mousedown' && event.button === 0) {
+                    scene.remove(selectedBlock);
+                } else if (event.type === 'mousedown' && event.button === 2) {
+                    const newBlock = new THREE.Mesh(
+                        new THREE.BoxGeometry(blockSize, blockSize, blockSize),
+                        new THREE.MeshBasicMaterial({ color: player.currentBlock })
+                    );
+                    newBlock.position.set(selectedBlock.position.x, selectedBlock.position.y + 1, selectedBlock.position.z);
+                    scene.add(newBlock);
+                }
+            }
+        }
+
+        // Mouse movement for camera rotation
+        let mouseX = 0;
+        let mouseY = 0;
+        let isMouseDown = false;
+        const sensitivity = 0.002;
+
+        window.addEventListener('mousemove', (event) => {
+            if (isMouseDown) {
+                mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+                mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+
+                camera.rotation.y = mouseX * Math.PI;
+                camera.rotation.x = mouseY * Math.PI / 4;
+            }
+        });
+
+        window.addEventListener('mousedown', () => {
+            isMouseDown = true;
+        });
+
+        window.addEventListener('mouseup', () => {
+            isMouseDown = false;
+        });
+
+        // Keyboard controls for movement
+        const keys = {};
+        window.addEventListener('keydown', (event) => { keys[event.code] = true; });
+        window.addEventListener('keyup', (event) => { keys[event.code] = false; });
+
+        function movePlayer() {
+            if (keys['KeyW']) player.position.z -= player.speed;
+            if (keys['KeyS']) player.position.z += player.speed;
+            if (keys['KeyA']) player.position.x -= player.speed;
+            if (keys['KeyD']) player.position.x += player.speed;
+            if (keys['Space']) player.position.y += player.speed;
+
+            camera.position.set(player.position.x, player.position.y, player.position.z + 5);
+        }
+
+        // FPS control
+        let lastTime = 0;
+        function setFrameRate() {
+            const currentTime = Date.now();
+            const deltaTime = (currentTime - lastTime) / 1000;
+            if (deltaTime > 1 / 60) {
+                lastTime = currentTime;
+                animate();
+            }
+            requestAnimationFrame(setFrameRate);
+        }
+
+        // Game Loop
+        function animate() {
+            movePlayer();
+            updateBars();
+            updateHotbar();
+            renderer.render(scene, camera);
+        }
+
+        // Start the game
+        generateChunk(0, 0);
+        createInventory();
+        setFrameRate();
+    </script>
+</body>
+</html>
