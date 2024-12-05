@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Minecraft Survival Mode with Mobs</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        .bar {
+            display: flex;
+            margin-bottom: 5px;
+        }
+        .heart, .hunger {
+            width: 20px;
+            height: 20px;
+            background-color: red;
+            margin-right: 2px;
+        }
+        .hunger { background-color: orange; }
+    </style>
+</head>
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <div id="hud">
+        <div id="health-bar" class="bar"></div>
+        <div id="hunger-bar" class="bar"></div>
+    </div>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const light = new THREE.AmbientLight(0xffffff); // Soft white light
+        scene.add(light);
+
+        // Create ground (5x5 blocks)
+        const blockSize = 1;
+        const geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
+        const material = new THREE.MeshBasicMaterial({ color: 0x8B4513 });
+        for (let x = -5; x <= 5; x++) {
+            for (let z = -5; z <= 5; z++) {
+                const block = new THREE.Mesh(geometry, material);
+                block.position.set(x, -0.5, z);
+                scene.add(block);
+            }
+        }
+
+        // Player setup
+        camera.position.y = 1.5;
+        const player = { x: 0, y: 0, z: 0, speed: 0.1, health: 10, hunger: 10 };
+
+        // Health and hunger bar elements
+        const healthBar = document.getElementById('health-bar');
+        const hungerBar = document.getElementById('hunger-bar');
+        function updateBars() {
+            healthBar.innerHTML = '';
+            hungerBar.innerHTML = '';
+            for (let i = 0; i < player.health; i++) {
+                const heart = document.createElement('div');
+                heart.className = 'heart';
+                healthBar.appendChild(heart);
+            }
+            for (let i = 0; i < player.hunger; i++) {
+                const hunger = document.createElement('div');
+                hunger.className = 'hunger';
+                hungerBar.appendChild(hunger);
+            }
+        }
+
+        // Player movement
+        const keys = {};
+        window.addEventListener('keydown', (e) => keys[e.key] = true);
+        window.addEventListener('keyup', (e) => keys[e.key] = false);
+
+        function movePlayer() {
+            if (keys['w']) camera.position.z -= player.speed;
+            if (keys['s']) camera.position.z += player.speed;
+            if (keys['a']) camera.position.x -= player.speed;
+            if (keys['d']) camera.position.x += player.speed;
+        }
+
+        // Mobs setup
+        const mobs = [];
+        const mobCount = 5;
+        for (let i = 0; i < mobCount; i++) {
+            const mob = new THREE.Mesh(
+                new THREE.BoxGeometry(1, 1, 1),
+                new THREE.MeshBasicMaterial({ color: 0xff0000 })
+            );
+            mob.position.set(Math.random() * 10 - 5, 0, Math.random() * 10 - 5);
+            scene.add(mob);
+            mobs.push(mob);
+        }
+
+        function moveMobs() {
+            mobs.forEach(mob => {
+                mob.position.x += (Math.random() - 0.5) * 0.05;
+                mob.position.z += (Math.random() - 0.5) * 0.05;
+            });
+        }
+
+        function checkCollision() {
+            mobs.forEach(mob => {
+                const distance = Math.sqrt(
+                    Math.pow(camera.position.x - mob.position.x, 2) +
+                    Math.pow(camera.position.z - mob.position.z, 2)
+                );
+                if (distance < 1) {
+                    player.health -= 0.01;  // Slow damage over time
+                    if (player.health <= 0) {
+                        alert('Game Over');
+                        player.health = 10;  // Reset for simplicity
+                        camera.position.set(0, 1.5, 0);
+                    }
+                }
+            });
+        }
+
+        // Hunger system
+        setInterval(() => {
+            if (player.hunger > 0) {
+                player.hunger -= 1;
+                if (player.hunger === 0) player.health -= 1;  // Starvation damage
+            }
+            updateBars();
+        }, 5000);  // Decrease hunger every 5 seconds
+
+        // Game loop
+        function animate() {
+            requestAnimationFrame(animate);
+            movePlayer();
+            moveMobs();
+            checkCollision();
+            updateBars();
+            renderer.render(scene, camera);
+        }
+
+        updateBars();
+        animate();
+    </script>
+</body>
+</html>
