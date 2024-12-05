@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Simulator Lite</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: black; }
+        canvas { display: block; background-color: #87CEEB; }
+        #inventory { position: absolute; top: 10px; left: 10px; color: white; font-family: Arial, sans-serif; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="inventory">Inventory: <span id="inventory-items">None</span></div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Player object
+        const player = { x: 100, y: 100, size: 30, speed: 5 };
+
+        // World blocks (simple 2D array)
+        const blockSize = 40;
+        const blocks = [];
+        const rows = Math.floor(canvas.height / blockSize);
+        const cols = Math.floor(canvas.width / blockSize);
+
+        for (let i = 0; i < rows; i++) {
+            blocks[i] = [];
+            for (let j = 0; j < cols; j++) {
+                blocks[i][j] = Math.random() < 0.1 ? 'stone' : null;  // 10% chance of stone block
+            }
+        }
+
+        // Inventory
+        const inventory = {};
+
+        // Draw player
+        function drawPlayer() {
+            ctx.fillStyle = 'gray';
+            ctx.fillRect(player.x, player.y, player.size, player.size);
+        }
+
+        // Draw blocks
+        function drawBlocks() {
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    if (blocks[i][j] === 'stone') {
+                        ctx.fillStyle = 'darkgray';
+                        ctx.fillRect(j * blockSize, i * blockSize, blockSize, blockSize);
+                    }
+                }
+            }
+        }
+
+        // Mobs
+        const mobs = [{ x: 300, y: 300, size: 30, speed: 2 }];
+
+        function drawMobs() {
+            ctx.fillStyle = 'red';
+            mobs.forEach(mob => {
+                ctx.fillRect(mob.x, mob.y, mob.size, mob.size);
+            });
+        }
+
+        function moveMobs() {
+            mobs.forEach(mob => {
+                mob.x += (Math.random() - 0.5) * mob.speed;
+                mob.y += (Math.random() - 0.5) * mob.speed;
+            });
+        }
+
+        // Handle player movement
+        function movePlayer() {
+            window.addEventListener('keydown', (e) => {
+                switch(e.key) {
+                    case 'ArrowLeft': player.x -= player.speed; break;
+                    case 'ArrowRight': player.x += player.speed; break;
+                    case 'ArrowUp': player.y -= player.speed; break;
+                    case 'ArrowDown': player.y += player.speed; break;
+                    case ' ': mineBlock(); break;  // Space to mine
+                }
+            });
+        }
+
+        // Mine block function
+        function mineBlock() {
+            const col = Math.floor(player.x / blockSize);
+            const row = Math.floor(player.y / blockSize);
+            if (blocks[row][col] === 'stone') {
+                addToInventory('stone');
+                blocks[row][col] = null;
+            }
+        }
+
+        // Add item to inventory
+        function addToInventory(item) {
+            if (inventory[item]) {
+                inventory[item]++;
+            } else {
+                inventory[item] = 1;
+            }
+            updateInventoryUI();
+        }
+
+        // Update inventory display
+        function updateInventoryUI() {
+            document.getElementById('inventory-items').innerText = JSON.stringify(inventory);
+        }
+
+        // Game loop
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBlocks();
+            drawPlayer();
+            drawMobs();
+            moveMobs();
+            requestAnimationFrame(gameLoop);
+        }
+
+        movePlayer();
+        gameLoop();
+    </script>
+</body>
+</html>
