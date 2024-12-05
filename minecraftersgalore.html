@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basic Minecraft Simulator</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: black; }
+        canvas { display: block; background-color: #87CEEB; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas to window size
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Player object
+        const player = { x: canvas.width / 2, y: canvas.height / 2, size: 30, speed: 5 };
+
+        function drawPlayer() {
+            ctx.fillStyle = 'gray';
+            ctx.fillRect(player.x, player.y, player.size, player.size);
+        }
+
+        function movePlayer() {
+            window.addEventListener('keydown', (e) => {
+                switch(e.key) {
+                    case 'ArrowLeft': player.x -= player.speed; break;
+                    case 'ArrowRight': player.x += player.speed; break;
+                    case 'ArrowUp': player.y -= player.speed; break;
+                    case 'ArrowDown': player.y += player.speed; break;
+                }
+            });
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
+            drawPlayer(); // Draw player
+            requestAnimationFrame(gameLoop); // Repeat loop
+        }
+
+        movePlayer();
+        gameLoop();
+    </script>
+</body>
+</html>
