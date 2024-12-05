@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realistic Fortnite-like Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #1e1e1e; }
+        canvas { display: block; }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        #health {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        #ammo {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        #crosshair {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        #crosshair div {
+            position: absolute;
+            background-color: white;
+        }
+        #crosshair .horizontal {
+            width: 20px;
+            height: 2px;
+            top: 9px;
+            left: 0;
+        }
+        #crosshair .vertical {
+            width: 2px;
+            height: 20px;
+            top: 0;
+            left: 9px;
+        }
+    </style>
+</head>
+<body>
+    <div id="crosshair">
+        <div class="horizontal"></div>
+        <div class="vertical"></div>
+    </div>
+
+    <div id="hud">
+        <div id="health">Health: 100</div>
+        <div id="ammo">Ammo: ∞</div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Scene, camera, and renderer setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const light = new THREE.AmbientLight(0xffffff);
+        scene.add(light);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(1, 1, 1).normalize();
+        scene.add(directionalLight);
+
+        // Player object
+        const player = {
+            health: 100,
+            position: new THREE.Vector3(0, 2, 0),
+            speed: 0.1,
+            jumpHeight: 1.5,
+            isJumping: false,
+            velocityY: 0,
+            gravity: -0.05,
+            isShooting: false,
+            takingDamage: false,
+            damageTimer: 0
+        };
+
+        // Player model
+        const playerGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
+        const playerMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        const playerMesh = new THREE.Mesh(playerGeometry, playerMaterial);
+        playerMesh.position.set(player.position.x, player.position.y, player.position.z);
+        scene.add(playerMesh);
+
+        // Health and ammo display
+        const healthDisplay = document.getElementById('health');
+        const ammoDisplay = document.getElementById('ammo');
+
+        // Basic terrain generation (ground)
+        const groundGeometry = new THREE.PlaneGeometry(100, 100);
+        const groundMaterial = new THREE.MeshBasicMaterial({ color: 0x228B22, side: THREE.DoubleSide });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = Math.PI / -2;
+        scene.add(ground);
+
+        // AI Enemy setup
+        const enemies = [];
+        const enemyCount = 3;
+
+        function createEnemy() {
+            const geometry = new THREE.SphereGeometry(1, 32, 32);
+            const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const enemy = new THREE.Mesh(geometry, material);
+            enemy.position.set(Math.random() * 50 - 25, 1, Math.random() * 50 - 25);
+            enemies.push(enemy);
+            scene.add(enemy);
+        }
+
+        // Create enemies
+        for (let i = 0; i < enemyCount; i++) {
+            createEnemy();
+        }
+
+        // Player movement
+        const keys = {};
+        window.addEventListener('keydown', (event) => { keys[event.code] = true; });
+        window.addEventListener('keyup', (event) => { keys[event.code] = false; });
+
+        function movePlayer() {
+            // Player movement (WASD)
+            if (keys['KeyW']) player.position.z -= player.speed;
+            if (keys['KeyS']) player.position.z += player.speed;
+            if (keys['KeyA']) player.position.x -= player.speed;
+            if (keys['KeyD']) player.position.x += player.speed;
+
+            // Jumping (Spacebar)
+            if (keys['Space'] && !player.isJumping) {
+                player.velocityY = player.jumpHeight;
+                player.isJumping = true;
+            }
+
+            // Gravity effect
+            if (player.isJumping) {
+                player.velocityY += player.gravity;
+                player.position.y += player.velocityY;
+                if (player.position.y <= 2) {
+                    player.isJumping = false;
+                    player.position.y = 2;
+                    player.velocityY = 0;
+                }
+            }
+
+            // Update player mesh position
+            playerMesh.position.set(player.position.x, player.position.y, player.position.z);
+            camera.position.set(player.position.x, player.position.y, player.position.z + 5);
+        }
+
+        // Shooting mechanism
+        window.addEventListener('click', () => {
+            // Simulate shooting
+            player.isShooting = true;
+        });
+
+        // AI behavior (move towards player)
+        function moveEnemies() {
+            enemies.forEach(enemy => {
+                const direction = new THREE.Vector3();
+                direction.subVectors(player.position, enemy.position).normalize();
+                enemy.position.add(direction.multiplyScalar(0.05));
+            });
+        }
+
+        // Damage over time when shot
+        function applyDamageOverTime() {
+            if (player.takingDamage) {
+                const now = Date.now();
+                if (now - player.damageTimer > 1000) {
+                    player.health -= 1;
+                    player.damageTimer = now;
+                    healthDisplay.innerText = `Health: ${player.health}`;
+                }
+            }
+        }
+
+        // Update health display
+        function updateHealthDisplay() {
+            healthDisplay.innerText = `Health: ${player.health}`;
+        }
+
+        // Game loop
+        function animate() {
+            movePlayer();
+            moveEnemies();
+            applyDamageOverTime();
+            updateHealthDisplay();
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+
+        // Start game loop
+        animate();
+
+        // Resize handling
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        });
+    </script>
+</body>
+</html>
