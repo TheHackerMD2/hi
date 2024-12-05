@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fortnite-like Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #1e1e1e; }
+        canvas { display: block; }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        #health, #shield, #ammo {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        #crosshair {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        #crosshair div {
+            position: absolute;
+            background-color: white;
+        }
+        #crosshair .horizontal {
+            width: 20px;
+            height: 2px;
+            top: 9px;
+            left: 0;
+        }
+        #crosshair .vertical {
+            width: 2px;
+            height: 20px;
+            top: 0;
+            left: 9px;
+        }
+    </style>
+</head>
+<body>
+    <div id="crosshair">
+        <div class="horizontal"></div>
+        <div class="vertical"></div>
+    </div>
+
+    <div id="hud">
+        <div id="health">Health: 100</div>
+        <div id="shield">Shield: 50</div>
+        <div id="ammo">Ammo: 10</div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Scene, camera, renderer setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const light = new THREE.AmbientLight(0xffffff);
+        scene.add(light);
+
+        // Player object
+        const player = {
+            health: 100,
+            shield: 50,
+            ammo: 10,
+            position: new THREE.Vector3(0, 2, 0),
+            speed: 0.1,
+            attackDamage: 10,
+            isShooting: false,
+            velocityY: 0,
+            canShoot: true
+        };
+
+        // Crosshair
+        const crosshair = document.getElementById('crosshair');
+        const ammoDisplay = document.getElementById('ammo');
+        const healthDisplay = document.getElementById('health');
+        const shieldDisplay = document.getElementById('shield');
+
+        // Basic terrain generation (just a ground plane for now)
+        const groundGeometry = new THREE.PlaneGeometry(100, 100);
+        const groundMaterial = new THREE.MeshBasicMaterial({ color: 0x228B22, side: THREE.DoubleSide });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = Math.PI / -2;
+        ground.position.y = 0;
+        scene.add(ground);
+
+        // AI Enemy setup
+        const enemies = [];
+        const enemyCount = 5;
+
+        function createEnemy() {
+            const geometry = new THREE.SphereGeometry(1, 32, 32);
+            const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const enemy = new THREE.Mesh(geometry, material);
+            enemy.position.set(Math.random() * 50 - 25, 1, Math.random() * 50 - 25);
+            enemies.push(enemy);
+            scene.add(enemy);
+        }
+
+        // Create enemies
+        for (let i = 0; i < enemyCount; i++) {
+            createEnemy();
+        }
+
+        // Player movement
+        const keys = {};
+        window.addEventListener('keydown', (event) => { keys[event.code] = true; });
+        window.addEventListener('keyup', (event) => { keys[event.code] = false; });
+
+        function movePlayer() {
+            if (keys['KeyW']) player.position.z -= player.speed;
+            if (keys['KeyS']) player.position.z += player.speed;
+            if (keys['KeyA']) player.position.x -= player.speed;
+            if (keys['KeyD']) player.position.x += player.speed;
+            if (keys['Space']) player.position.y += player.speed;
+
+            camera.position.set(player.position.x, player.position.y, player.position.z + 5);
+        }
+
+        // Shooting mechanism
+        let lastShotTime = 0;
+        function shoot() {
+            if (player.canShoot && player.ammo > 0) {
+                const now = Date.now();
+                if (now - lastShotTime > 1000) { // 1 second between shots
+                    lastShotTime = now;
+                    player.ammo--;
+                    ammoDisplay.innerText = `Ammo: ${player.ammo}`;
+                    player.canShoot = false;
+                    // Detect shooting (raycasting)
+                    const raycaster = new THREE.Raycaster();
+                    const mouse = new THREE.Vector2(
+                        (event.clientX / window.innerWidth) * 2 - 1,
+                        -(event.clientY / window.innerHeight) * 2 + 1
+                    );
+                    raycaster.setFromCamera(mouse, camera);
+                    const intersects = raycaster.intersectObjects(enemies);
+                    if (intersects.length > 0) {
+                        const enemy = intersects[0].object;
+                        enemy.material.color.set(0x0000ff); // Change color when hit
+                        player.ammo = Math.max(0, player.ammo); // Prevent negative ammo
+                    }
+                    setTimeout(() => {
+                        player.canShoot = true;
+                    }, 500); // Can shoot every 500ms
+                }
+            }
+        }
+
+        window.addEventListener('click', shoot);
+
+        // Enemy AI - move towards player
+        function moveEnemies() {
+            enemies.forEach(enemy => {
+                const direction = new THREE.Vector3();
+                direction.subVectors(player.position, enemy.position).normalize();
+                enemy.position.add(direction.multiplyScalar(0.05)); // Move towards player
+            });
+        }
+
+        // Player health and shield display update
+        function updateHealthDisplay() {
+            healthDisplay.innerText = `Health: ${player.health}`;
+            shieldDisplay.innerText = `Shield: ${player.shield}`;
+        }
+
+        // Check for collisions with enemies
+        function checkCollisions() {
+            enemies.forEach(enemy => {
+                if (enemy.position.distanceTo(player.position) < 2) { // Collision radius
+                    if (player.shield > 0) {
+                        player.shield -= 10;
+                    } else {
+                        player.health -= 10;
+                    }
+                    updateHealthDisplay();
+                }
+            });
+        }
+
+        // Game loop
+        function animate() {
+            movePlayer();
+            moveEnemies();
+            checkCollisions();
+            updateHealthDisplay();
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+
+        // Start the game loop
+        animate();
+    </script>
+</body>
+</html>
