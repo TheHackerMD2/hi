@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Clone with AI</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        <div>Health: <span id="health">100</span></div>
+    </div>
+    <div id="crosshair"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/simplex-noise/dist/simplex-noise.min.js"></script>
+    <script>
+        // Scene, Camera, Renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 20, 10);
+        scene.add(directionalLight);
+
+        // Skybox
+        const skyGeometry = new THREE.BoxGeometry(1000, 1000, 1000);
+        const skyMaterial = new THREE.MeshBasicMaterial({
+            color: 0x87ceeb, // Light blue for the sky
+            side: THREE.BackSide,
+        });
+        const skybox = new THREE.Mesh(skyGeometry, skyMaterial);
+        scene.add(skybox);
+
+        // Ground Plane
+        const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 }); // Green grass
+        const groundGeometry = new THREE.PlaneGeometry(200, 200, 10, 10);
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2; // Flat horizontal plane
+        scene.add(ground);
+
+        // Player
+        const player = {
+            health: 100,
+            position: new THREE.Vector3(0, 2, 0),
+        };
+        camera.position.set(0, 2, 5);
+
+        // HUD
+        const healthDisplay = document.getElementById("health");
+
+        // AI Enemies
+        const enemies = [];
+        const enemyMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+        function createEnemy(x, z) {
+            const enemy = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), enemyMaterial);
+            enemy.position.set(x, 1, z);
+            enemy.health = 50;
+            enemies.push(enemy);
+            scene.add(enemy);
+        }
+
+        for (let i = 0; i < 5; i++) {
+            createEnemy(Math.random() * 50 - 25, Math.random() * 50 - 25);
+        }
+
+        function moveEnemies() {
+            enemies.forEach((enemy) => {
+                const distance = enemy.position.distanceTo(camera.position);
+                if (distance < 15) {
+                    const direction = new THREE.Vector3()
+                        .subVectors(camera.position, enemy.position)
+                        .normalize();
+                    enemy.position.add(direction.multiplyScalar(0.05));
+                }
+
+                if (distance < 2) {
+                    player.health -= 0.1;
+                }
+
+                if (enemy.health <= 0) {
+                    scene.remove(enemy);
+                }
+            });
+        }
+
+        // Player Controls
+        const keys = {};
+        window.addEventListener("keydown", (e) => (keys[e.key] = true));
+        window.addEventListener("keyup", (e) => (keys[e.key] = false));
+
+        const speed = 0.1;
+        function movePlayer() {
+            if (keys["w"]) camera.position.z -= speed;
+            if (keys["s"]) camera.position.z += speed;
+            if (keys["a"]) camera.position.x -= speed;
+            if (keys["d"]) camera.position.x += speed;
+        }
+
+        // Shooting Mechanic
+        window.addEventListener("click", () => {
+            const raycaster = new THREE.Raycaster();
+            raycaster.set(camera.position, camera.getWorldDirection(new THREE.Vector3()));
+
+            const intersects = raycaster.intersectObjects(enemies);
+            if (intersects.length > 0) {
+                const target = intersects[0].object;
+                target.health -= 10;
+            }
+        });
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            movePlayer();
+            moveEnemies();
+            healthDisplay.textContent = Math.max(Math.floor(player.health), 0);
+            renderer.render(scene, camera);
+
+            // Check Game Over
+            if (player.health <= 0) {
+                alert("Game Over!");
+                window.location.reload();
+            }
+        }
+        animate();
+
+        // Window Resize Handling
+        window.addEventListener("resize", () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        });
+    </script>
+</body>
+</html>
