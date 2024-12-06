@@ -13,6 +13,17 @@
         canvas {
             display: block;
         }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            background-color: white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
         #ui {
             position: absolute;
             bottom: 10px;
@@ -38,8 +49,8 @@
     </style>
 </head>
 <body>
+    <div id="crosshair"></div>
     <div id="ui">
-        <!-- Inventory Slots -->
         <div class="slot" id="slot1">1</div>
         <div class="slot active" id="slot2">2</div>
         <div class="slot" id="slot3">3</div>
@@ -66,11 +77,12 @@
         // Player
         const player = {
             position: new THREE.Vector3(0, 1, 0),
+            rotation: { x: 0, y: 0 },
             hunger: 100,
             health: 100,
         };
 
-        // World Generation (Simple Terrain with Trees)
+        // World Generation
         function generateTerrain(size) {
             const terrain = new THREE.Group();
             const groundGeometry = new THREE.PlaneGeometry(size, size, 50, 50);
@@ -79,7 +91,6 @@
             ground.rotation.x = -Math.PI / 2;
             terrain.add(ground);
 
-            // Generate Trees
             for (let i = 0; i < 50; i++) {
                 const tree = generateTree();
                 tree.position.set(
@@ -94,15 +105,12 @@
 
         function generateTree() {
             const tree = new THREE.Group();
-
-            // Trunk
             const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.5, 10);
             const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
             const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
             trunk.position.y = 5;
             tree.add(trunk);
 
-            // Leaves
             const leavesGeometry = new THREE.SphereGeometry(4, 8, 8);
             const leavesMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 });
             const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
@@ -137,19 +145,54 @@
             }
         });
 
-        // Basic Controls
+        // Basic Controls and Mouse View Adjustment
         const keys = {};
+        let isPointerLocked = false;
+
+        document.body.addEventListener("click", () => {
+            document.body.requestPointerLock();
+        });
+
+        document.addEventListener("pointerlockchange", () => {
+            isPointerLocked = !!document.pointerLockElement;
+        });
+
         window.addEventListener("keydown", (e) => (keys[e.key] = true));
         window.addEventListener("keyup", (e) => (keys[e.key] = false));
 
+        window.addEventListener("mousemove", (e) => {
+            if (isPointerLocked) {
+                const sensitivity = 0.002;
+                player.rotation.y -= e.movementX * sensitivity;
+                player.rotation.x -= e.movementY * sensitivity;
+
+                // Clamp vertical rotation
+                player.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, player.rotation.x));
+            }
+        });
+
         function movePlayer(delta) {
-            if (keys["w"]) player.position.z -= delta;
-            if (keys["s"]) player.position.z += delta;
-            if (keys["a"]) player.position.x -= delta;
-            if (keys["d"]) player.position.x += delta;
+            const speed = 10;
+            const forward = new THREE.Vector3(
+                Math.sin(player.rotation.y),
+                0,
+                Math.cos(player.rotation.y)
+            ).normalize();
+
+            const right = new THREE.Vector3(
+                Math.cos(player.rotation.y),
+                0,
+                -Math.sin(player.rotation.y)
+            ).normalize();
+
+            if (keys["w"]) player.position.add(forward.multiplyScalar(delta * speed));
+            if (keys["s"]) player.position.add(forward.multiplyScalar(-delta * speed));
+            if (keys["a"]) player.position.add(right.multiplyScalar(-delta * speed));
+            if (keys["d"]) player.position.add(right.multiplyScalar(delta * speed));
 
             camera.position.set(player.position.x, 10, player.position.z + 10);
             camera.lookAt(player.position.x, 0, player.position.z);
+            camera.rotation.set(player.rotation.x, player.rotation.y, 0);
         }
 
         // Animation Loop
@@ -158,7 +201,7 @@
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
 
-            movePlayer(delta * 10);
+            movePlayer(delta);
             renderer.render(scene, camera);
         }
         animate();
