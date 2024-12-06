@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Terrain with Trees, Player and Collision</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        <div>Health: <span id="health">100</span></div>
+    </div>
+    <div id="crosshair"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Scene, Camera, Renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 20, 10);
+        scene.add(directionalLight);
+
+        // Skybox (light blue sky)
+        const skyGeometry = new THREE.BoxGeometry(1000, 1000, 1000);
+        const skyMaterial = new THREE.MeshBasicMaterial({
+            color: 0x87ceeb, // Light blue sky
+            side: THREE.BackSide,
+        });
+        const skybox = new THREE.Mesh(skyGeometry, skyMaterial);
+        scene.add(skybox);
+
+        // Terrain Generation using Perlin Noise
+        const terrainSize = 200;
+        const terrainResolution = 50;
+        const noiseScale = 0.1;
+
+        function generateTerrain() {
+            const geometry = new THREE.PlaneGeometry(terrainSize, terrainSize, terrainResolution, terrainResolution);
+            geometry.rotateX(-Math.PI / 2);
+            const vertices = geometry.attributes.position.array;
+
+            for (let i = 0; i < vertices.length; i += 3) {
+                const x = vertices[i];
+                const z = vertices[i + 2];
+                const height = Math.sin(x * noiseScale) * Math.cos(z * noiseScale) * 10;
+                vertices[i + 1] = height;
+            }
+
+            const material = new THREE.MeshStandardMaterial({ color: 0x228B22, flatShading: true });
+            const terrain = new THREE.Mesh(geometry, material);
+            scene.add(terrain);
+
+            return geometry; // Return geometry to use for collision detection
+        }
+
+        // Advanced Tree Generation
+        function generateTree(x, z) {
+            // Tree trunk with random height
+            const trunkHeight = Math.random() * 6 + 4;
+            const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.5, trunkHeight);
+            const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+            trunk.position.set(x, trunkHeight / 2, z);
+            scene.add(trunk);
+
+            // Random foliage (sphere-based)
+            const leavesMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 });
+            const numLeaves = Math.floor(Math.random() * 4) + 3; // Random number of spheres
+            for (let i = 0; i < numLeaves; i++) {
+                const radius = Math.random() * 2 + 2;
+                const leavesGeometry = new THREE.SphereGeometry(radius, 8, 8);
+                const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+
+                const offsetX = Math.random() * 3 - 1.5;
+                const offsetZ = Math.random() * 3 - 1.5;
+                const offsetY = trunkHeight + Math.random() * 3; // Random height on the trunk
+
+                leaves.position.set(x + offsetX, offsetY, z + offsetZ);
+                scene.add(leaves);
+            }
+        }
+
+        // Randomly place trees on the terrain
+        function placeRandomTrees(numTrees) {
+            for (let i = 0; i < numTrees; i++) {
+                const x = Math.random() * terrainSize - terrainSize / 2;
+                const z = Math.random() * terrainSize - terrainSize / 2;
+                const height = Math.sin(x * noiseScale) * Math.cos(z * noiseScale) * 10;
+                if (height > 3) {  // Only place trees on relatively flat areas
+                    generateTree(x, z);
+                }
+            }
+        }
+
+        placeRandomTrees(20); // Generate 20 trees
+
+        // Player Creation
+        const playerGeometry = new THREE.BoxGeometry(1, 2, 1); // A simple cube for the player
+        const playerMaterial = new THREE.MeshStandardMaterial({ color: 0xFF6347 });
+        const player = new THREE.Mesh(playerGeometry, playerMaterial);
+        player.position.set(0, 1, 0);
+        scene.add(player);
+
+        // Player's bounding box for collision detection
+        const playerBoundingBox = new THREE.Box3().setFromObject(player);
+
+        // Pointer Lock Setup
+        let isPointerLocked = false;
+        document.body.addEventListener("click", () => {
+            if (!isPointerLocked) {
+                document.body.requestPointerLock();
+            }
+        });
+
+        document.addEventListener("pointerlockchange", () => {
+            isPointerLocked = document.pointerLockElement === document.body;
+        });
+
+        // Mouse Movement for Camera Control
+        let rotationSpeed = 0.002;
+        document.addEventListener("mousemove", (event) => {
+            if (isPointerLocked) {
+                camera.rotation.y -= event.movementX * rotationSpeed;
+                camera.rotation.x -= event.movementY * rotationSpeed;
+
+                // Limit vertical rotation to prevent flipping
+                camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+            }
+        });
+
+        // Player Controls
+        const keys = {};
+        window.addEventListener("keydown", (e) => (keys[e.key] = true));
+        window.addEventListener("keyup", (e) => (keys[e.key] = false));
+
+        const playerSpeed = 0.1;
+        function movePlayer() {
+            const direction = new THREE.Vector3();
+            if (keys["w"]) direction.z = -playerSpeed;
+            if (keys["s"]) direction.z = playerSpeed;
+            if (keys["a"]) direction.x = -playerSpeed;
+            if (keys["d"]) direction.x = playerSpeed;
+
+            direction.applyEuler(camera.rotation);
+
+            // Temporarily move the player and check collision
+            player.position.add(direction);
+            playerBoundingBox.setFromObject(player);
+
+            // Check collision with terrain and other objects
+            const terrainCollisions = checkCollisions(playerBoundingBox, terrainGeometry);
+            if (terrainCollisions) {
+                // Revert if collision detected
+                player.position.sub(direction);
+            }
+        }
+
+        function checkCollisions(playerBox, terrainGeometry) {
+            const terrainVertices = terrainGeometry.attributes.position.array;
+            // Simple bounding box collision check with terrain (we'd enhance this with more accurate mesh collision checks)
+            for (let i = 0; i < terrainVertices.length; i += 3) {
+                const x = terrainVertices[i];
+                const y = terrainVertices[i + 1];
+                const z = terrainVertices[i + 2];
+                const terrainPoint = new THREE.Vector3(x, y, z);
+
+                if (playerBox.containsPoint(terrainPoint)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            movePlayer();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Window Resize Handling
+        window.addEventListener("resize", () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        });
+
+        // Generate Terrain on Scene Load
+        const terrainGeometry = generateTerrain();
+    </script>
+</body>
+</html>
