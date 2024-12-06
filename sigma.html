@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Simulator</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+        }
+        .slot {
+            width: 50px;
+            height: 50px;
+            border: 2px solid white;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            text-align: center;
+            line-height: 50px;
+            font-size: 20px;
+        }
+        .slot.active {
+            border-color: yellow;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <!-- Inventory Slots -->
+        <div class="slot" id="slot1">1</div>
+        <div class="slot active" id="slot2">2</div>
+        <div class="slot" id="slot3">3</div>
+        <div class="slot" id="slot4">4</div>
+        <div class="slot" id="slot5">5</div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Core Components
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const light = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(light);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(50, 100, 50).normalize();
+        scene.add(directionalLight);
+
+        // Player
+        const player = {
+            position: new THREE.Vector3(0, 1, 0),
+            hunger: 100,
+            health: 100,
+        };
+
+        // World Generation (Simple Terrain with Trees)
+        function generateTerrain(size) {
+            const terrain = new THREE.Group();
+            const groundGeometry = new THREE.PlaneGeometry(size, size, 50, 50);
+            const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            terrain.add(ground);
+
+            // Generate Trees
+            for (let i = 0; i < 50; i++) {
+                const tree = generateTree();
+                tree.position.set(
+                    Math.random() * size - size / 2,
+                    5,
+                    Math.random() * size - size / 2
+                );
+                terrain.add(tree);
+            }
+            return terrain;
+        }
+
+        function generateTree() {
+            const tree = new THREE.Group();
+
+            // Trunk
+            const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.5, 10);
+            const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+            trunk.position.y = 5;
+            tree.add(trunk);
+
+            // Leaves
+            const leavesGeometry = new THREE.SphereGeometry(4, 8, 8);
+            const leavesMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 });
+            const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+            leaves.position.y = 10;
+            tree.add(leaves);
+
+            return tree;
+        }
+
+        const terrain = generateTerrain(500);
+        scene.add(terrain);
+
+        // Inventory System
+        const inventory = ["Wood", "Stone", "Iron", "Food", "Gold"];
+        const uiSlots = document.querySelectorAll(".slot");
+
+        let activeSlot = 1;
+        function updateUI() {
+            uiSlots.forEach((slot, index) => {
+                if (index + 1 === activeSlot) {
+                    slot.classList.add("active");
+                } else {
+                    slot.classList.remove("active");
+                }
+            });
+        }
+
+        window.addEventListener("keydown", (e) => {
+            if (e.key >= 1 && e.key <= 5) {
+                activeSlot = parseInt(e.key);
+                updateUI();
+            }
+        });
+
+        // Basic Controls
+        const keys = {};
+        window.addEventListener("keydown", (e) => (keys[e.key] = true));
+        window.addEventListener("keyup", (e) => (keys[e.key] = false));
+
+        function movePlayer(delta) {
+            if (keys["w"]) player.position.z -= delta;
+            if (keys["s"]) player.position.z += delta;
+            if (keys["a"]) player.position.x -= delta;
+            if (keys["d"]) player.position.x += delta;
+
+            camera.position.set(player.position.x, 10, player.position.z + 10);
+            camera.lookAt(player.position.x, 0, player.position.z);
+        }
+
+        // Animation Loop
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+
+            movePlayer(delta * 10);
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>
