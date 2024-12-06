@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Clone with AI and Crosshair Control</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        <div>Health: <span id="health">100</span></div>
+    </div>
+    <div id="crosshair"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Scene, Camera, Renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 20, 10);
+        scene.add(directionalLight);
+
+        // Ground Plane
+        const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 });
+        const groundGeometry = new THREE.PlaneGeometry(200, 200, 10, 10);
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2; // Flat plane
+        scene.add(ground);
+
+        // Pointer Lock Setup
+        let isPointerLocked = false;
+        document.body.addEventListener("click", () => {
+            if (!isPointerLocked) {
+                document.body.requestPointerLock();
+            }
+        });
+
+        document.addEventListener("pointerlockchange", () => {
+            isPointerLocked = document.pointerLockElement === document.body;
+        });
+
+        // Mouse Movement for Camera Control
+        let rotationSpeed = 0.002;
+        document.addEventListener("mousemove", (event) => {
+            if (isPointerLocked) {
+                camera.rotation.y -= event.movementX * rotationSpeed;
+                camera.rotation.x -= event.movementY * rotationSpeed;
+
+                // Limit vertical rotation to prevent flipping
+                camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+            }
+        });
+
+        // Player Controls
+        const keys = {};
+        window.addEventListener("keydown", (e) => (keys[e.key] = true));
+        window.addEventListener("keyup", (e) => (keys[e.key] = false));
+
+        const playerSpeed = 0.1;
+        function movePlayer() {
+            const direction = new THREE.Vector3();
+            if (keys["w"]) direction.z = -playerSpeed;
+            if (keys["s"]) direction.z = playerSpeed;
+            if (keys["a"]) direction.x = -playerSpeed;
+            if (keys["d"]) direction.x = playerSpeed;
+
+            // Rotate direction by the camera's orientation
+            direction.applyEuler(camera.rotation);
+            camera.position.add(direction);
+        }
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            movePlayer();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Window Resize Handling
+        window.addEventListener("resize", () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        });
+    </script>
+</body>
+</html>
