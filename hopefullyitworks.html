@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hyperrealistic Fortnite Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        #health, #shield {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        <div id="health">Health: 100</div>
+        <div id="shield">Shield: 50</div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/simplex-noise/dist/simplex-noise.min.js"></script>
+    <script>
+        // Scene, Camera, Renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 10, 10);
+        scene.add(directionalLight);
+
+        // Skybox
+        const skyboxGeometry = new THREE.BoxGeometry(1000, 1000, 1000);
+        const skyboxMaterial = new THREE.MeshBasicMaterial({ color: 0x87ceeb, side: THREE.BackSide });
+        const skybox = new THREE.Mesh(skyboxGeometry, skyboxMaterial);
+        scene.add(skybox);
+
+        // Terrain
+        const terrainGeometry = new THREE.PlaneGeometry(200, 200, 100, 100);
+        const terrainMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22, wireframe: false });
+        const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
+        terrain.rotation.x = -Math.PI / 2;
+        scene.add(terrain);
+
+        // Generate Terrain Heights
+        const simplex = new SimplexNoise();
+        terrainGeometry.vertices.forEach((v) => {
+            const height = simplex.noise2D(v.x / 20, v.y / 20) * 10;
+            v.z = height;
+        });
+        terrainGeometry.computeVertexNormals();
+        terrainGeometry.verticesNeedUpdate = true;
+
+        // Player
+        const player = new THREE.Mesh(
+            new THREE.CylinderGeometry(1, 1, 2, 32),
+            new THREE.MeshStandardMaterial({ color: 0x0000ff })
+        );
+        player.position.set(0, 2, 0);
+        scene.add(player);
+
+        // Enemy AI
+        const enemies = [];
+        const enemyMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+        function createEnemy(x, z) {
+            const enemy = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 32), enemyMaterial);
+            enemy.position.set(x, 1, z);
+            enemies.push(enemy);
+            scene.add(enemy);
+        }
+        for (let i = 0; i < 5; i++) {
+            createEnemy(Math.random() * 50 - 25, Math.random() * 50 - 25);
+        }
+
+        // Player Stats
+        let health = 100;
+        let shield = 50;
+
+        // Movement Controls
+        const keys = {};
+        window.addEventListener('keydown', (event) => (keys[event.key] = true));
+        window.addEventListener('keyup', (event) => (keys[event.key] = false));
+
+        function movePlayer() {
+            if (keys['w']) player.position.z -= 0.2;
+            if (keys['s']) player.position.z += 0.2;
+            if (keys['a']) player.position.x -= 0.2;
+            if (keys['d']) player.position.x += 0.2;
+
+            // Camera follows player
+            camera.position.set(player.position.x, player.position.y + 10, player.position.z + 15);
+            camera.lookAt(player.position);
+        }
+
+        // Shooting Mechanics
+        window.addEventListener('click', () => {
+            const raycaster = new THREE.Raycaster();
+            const direction = new THREE.Vector3(0, 0, -1);
+            direction.applyQuaternion(camera.quaternion);
+            raycaster.set(camera.position, direction);
+
+            const intersects = raycaster.intersectObjects(enemies);
+            if (intersects.length > 0) {
+                const enemy = intersects[0].object;
+                scene.remove(enemy);
+                enemies.splice(enemies.indexOf(enemy), 1);
+                console.log("Enemy hit!");
+            }
+        });
+
+        // Animate Enemies
+        function moveEnemies() {
+            enemies.forEach((enemy) => {
+                const direction = new THREE.Vector3(
+                    player.position.x - enemy.position.x,
+                    0,
+                    player.position.z - enemy.position.z
+                ).normalize();
+                enemy.position.add(direction.multiplyScalar(0.05));
+            });
+        }
+
+        // Update HUD
+        function updateHUD() {
+            document.getElementById('health').innerText = `Health: ${health}`;
+            document.getElementById('shield').innerText = `Shield: ${shield}`;
+        }
+
+        // Game Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            movePlayer();
+            moveEnemies();
+            updateHUD();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Resize Handling
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        });
+    </script>
+</body>
+</html>
