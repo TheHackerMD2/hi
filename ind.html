@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Clone</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        <div>Selected Block: <span id="selected-block">Grass</span></div>
+    </div>
+    <div id="crosshair"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/simplex-noise/dist/simplex-noise.min.js"></script>
+    <script>
+        // Scene, Camera, Renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 20, 10);
+        scene.add(directionalLight);
+
+        // Materials
+        const materials = {
+            Grass: new THREE.MeshStandardMaterial({ color: 0x228B22 }),
+            Dirt: new THREE.MeshStandardMaterial({ color: 0x8B4513 }),
+            Stone: new THREE.MeshStandardMaterial({ color: 0x808080 }),
+        };
+
+        // Terrain Generation
+        const terrainSize = 50;
+        const blockSize = 1;
+        const simplex = new SimplexNoise();
+
+        for (let x = -terrainSize / 2; x < terrainSize / 2; x++) {
+            for (let z = -terrainSize / 2; z < terrainSize / 2; z++) {
+                const height = Math.floor(simplex.noise2D(x / 20, z / 20) * 5) + 5;
+                for (let y = 0; y < height; y++) {
+                    const blockType = y < height - 1 ? (y < height - 3 ? "Stone" : "Dirt") : "Grass";
+                    const block = new THREE.Mesh(
+                        new THREE.BoxGeometry(blockSize, blockSize, blockSize),
+                        materials[blockType]
+                    );
+                    block.position.set(x, y, z);
+                    block.userData = { type: blockType };
+                    scene.add(block);
+                }
+            }
+        }
+
+        // Player Movement
+        const keys = {};
+        window.addEventListener('keydown', (e) => (keys[e.key] = true));
+        window.addEventListener('keyup', (e) => (keys[e.key] = false));
+
+        const velocity = { x: 0, y: 0, z: 0 };
+        const speed = 0.1;
+
+        function movePlayer() {
+            if (keys['w']) velocity.z = -speed;
+            if (keys['s']) velocity.z = speed;
+            if (keys['a']) velocity.x = -speed;
+            if (keys['d']) velocity.x = speed;
+
+            camera.position.x += velocity.x;
+            camera.position.z += velocity.z;
+            velocity.x *= 0.9; // Dampen movement
+            velocity.z *= 0.9;
+        }
+
+        // Block Interaction
+        let selectedBlock = "Grass";
+        document.getElementById('selected-block').innerText = selectedBlock;
+
+        window.addEventListener('click', () => {
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2(0, 0);
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObjects(scene.children);
+            if (intersects.length > 0) {
+                const targetBlock = intersects[0].object;
+                scene.remove(targetBlock); // Break the block
+            }
+        });
+
+        window.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2(0, 0);
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObjects(scene.children);
+            if (intersects.length > 0) {
+                const targetBlock = intersects[0].object;
+                const position = targetBlock.position.clone().add(intersects[0].face.normal);
+                const newBlock = new THREE.Mesh(
+                    new THREE.BoxGeometry(blockSize, blockSize, blockSize),
+                    materials[selectedBlock]
+                );
+                newBlock.position.set(position.x, position.y, position.z);
+                newBlock.userData = { type: selectedBlock };
+                scene.add(newBlock);
+            }
+        });
+
+        // Main Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            movePlayer();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Resize Handling
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        });
+    </script>
+</body>
+</html>
