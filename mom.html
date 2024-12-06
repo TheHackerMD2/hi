@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Simulator with Crosshair</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 10px;
+            height: 10px;
+            background-color: white;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        #ui {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+        }
+        .slot {
+            width: 50px;
+            height: 50px;
+            border: 2px solid white;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            text-align: center;
+            line-height: 50px;
+            font-size: 20px;
+        }
+        .slot.active {
+            border-color: yellow;
+        }
+    </style>
+</head>
+<body>
+    <div id="crosshair"></div>
+    <div id="ui">
+        <div class="slot" id="slot1">1</div>
+        <div class="slot active" id="slot2">2</div>
+        <div class="slot" id="slot3">3</div>
+        <div class="slot" id="slot4">4</div>
+        <div class="slot" id="slot5">5</div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Core Components
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const light = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(light);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(50, 100, 50).normalize();
+        scene.add(directionalLight);
+
+        // Player
+        const player = {
+            position: new THREE.Vector3(0, 1, 0),
+            hunger: 100,
+            health: 100,
+            rotation: { x: 0, y: 0 } // Tracks view rotation
+        };
+
+        // World Generation
+        function generateTerrain(size) {
+            const terrain = new THREE.Group();
+            const groundGeometry = new THREE.PlaneGeometry(size, size, 50, 50);
+            const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            terrain.add(ground);
+            return terrain;
+        }
+
+        const terrain = generateTerrain(500);
+        scene.add(terrain);
+
+        // Inventory UI
+        const uiSlots = document.querySelectorAll(".slot");
+        let activeSlot = 1;
+
+        function updateUI() {
+            uiSlots.forEach((slot, index) => {
+                if (index + 1 === activeSlot) {
+                    slot.classList.add("active");
+                } else {
+                    slot.classList.remove("active");
+                }
+            });
+        }
+
+        window.addEventListener("keydown", (e) => {
+            if (e.key >= 1 && e.key <= 5) {
+                activeSlot = parseInt(e.key);
+                updateUI();
+            }
+        });
+
+        // Movement and Controls
+        const keys = {};
+        window.addEventListener("keydown", (e) => (keys[e.key] = true));
+        window.addEventListener("keyup", (e) => (keys[e.key] = false));
+
+        function movePlayer(delta) {
+            if (keys["w"]) {
+                player.position.z -= Math.cos(player.rotation.y) * delta;
+                player.position.x -= Math.sin(player.rotation.y) * delta;
+            }
+            if (keys["s"]) {
+                player.position.z += Math.cos(player.rotation.y) * delta;
+                player.position.x += Math.sin(player.rotation.y) * delta;
+            }
+            if (keys["a"]) {
+                player.position.z -= Math.sin(player.rotation.y) * delta;
+                player.position.x += Math.cos(player.rotation.y) * delta;
+            }
+            if (keys["d"]) {
+                player.position.z += Math.sin(player.rotation.y) * delta;
+                player.position.x -= Math.cos(player.rotation.y) * delta;
+            }
+        }
+
+        // Pointer Lock for Mouse Control
+        document.body.addEventListener("click", () => {
+            document.body.requestPointerLock();
+        });
+
+        document.addEventListener("mousemove", (event) => {
+            if (document.pointerLockElement) {
+                const sensitivity = 0.002;
+                player.rotation.y -= event.movementX * sensitivity;
+                player.rotation.x -= event.movementY * sensitivity;
+
+                // Clamp the camera's vertical rotation
+                player.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, player.rotation.x));
+            }
+        });
+
+        // Animation Loop
+        const clock = new THREE.Clock();
+        function animate() {
+            const delta = clock.getDelta() * 10;
+
+            movePlayer(delta);
+
+            // Update Camera Position and Rotation
+            camera.position.set(player.position.x, 10, player.position.z + 10);
+            camera.lookAt(
+                player.position.x + Math.sin(player.rotation.y),
+                player.position.y + Math.tan(player.rotation.x),
+                player.position.z + Math.cos(player.rotation.y)
+            );
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+        animate();
+    </script>
+</body>
+</html>
