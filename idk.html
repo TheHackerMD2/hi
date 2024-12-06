@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minecraft Simulator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+    }
+    #world {
+      display: grid;
+      grid-template-columns: repeat(5, 50px);
+      gap: 5px;
+      margin-bottom: 20px;
+    }
+    .tile {
+      width: 50px;
+      height: 50px;
+      text-align: center;
+      vertical-align: middle;
+      border: 1px solid #ccc;
+      cursor: pointer;
+      line-height: 50px;
+    }
+    .inventory, .crafting {
+      margin-bottom: 20px;
+    }
+    .slot {
+      display: inline-block;
+      width: 100px;
+      height: 50px;
+      border: 1px solid #ccc;
+      margin: 5px;
+      text-align: center;
+      vertical-align: middle;
+      line-height: 50px;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Minecraft Simulator</h1>
+
+  <!-- World -->
+  <div id="world"></div>
+
+  <!-- Inventory -->
+  <h2>Inventory</h2>
+  <div id="inventory" class="inventory">
+    <div class="slot">Wood: <span id="wood-count">0</span></div>
+    <div class="slot">Stone: <span id="stone-count">0</span></div>
+  </div>
+
+  <!-- Crafting -->
+  <h2>Crafting</h2>
+  <div id="crafting" class="crafting">
+    <button onclick="craft('Pickaxe')">Craft Pickaxe (2 Wood, 3 Stone)</button>
+    <div>Pickaxes: <span id="pickaxe-count">0</span></div>
+  </div>
+
+  <script>
+    // JavaScript for game logic
+    const world = document.getElementById("world");
+    const inventory = {
+      wood: 0,
+      stone: 0,
+      pickaxe: 0
+    };
+
+    // World generation
+    const tiles = ["Wood", "Stone"];
+    for (let i = 0; i < 25; i++) {
+      const tileType = tiles[Math.floor(Math.random() * tiles.length)];
+      const tile = document.createElement("div");
+      tile.classList.add("tile");
+      tile.textContent = tileType;
+      tile.addEventListener("click", () => collectResource(tileType));
+      world.appendChild(tile);
+    }
+
+    // Collect resources
+    function collectResource(resource) {
+      inventory[resource.toLowerCase()]++;
+      updateInventory();
+    }
+
+    // Update inventory display
+    function updateInventory() {
+      document.getElementById("wood-count").textContent = inventory.wood;
+      document.getElementById("stone-count").textContent = inventory.stone;
+    }
+
+    // Crafting logic
+    function craft(item) {
+      if (item === "Pickaxe") {
+        if (inventory.wood >= 2 && inventory.stone >= 3) {
+          inventory.wood -= 2;
+          inventory.stone -= 3;
+          inventory.pickaxe++;
+          document.getElementById("pickaxe-count").textContent = inventory.pickaxe;
+          updateInventory();
+        } else {
+          alert("Not enough resources to craft a Pickaxe!");
+        }
+      }
+    }
+  </script>
+</body>
+</html>
