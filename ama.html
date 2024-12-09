@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecrafty Simulator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #e0e0e0;
+            margin: 0;
+            padding: 0;
+        }
+        #gameArea {
+            width: 800px;
+            height: 600px;
+            border: 2px solid #333;
+            background-color: #87ceeb;
+            position: relative;
+            overflow: hidden;
+        }
+        .block {
+            width: 50px;
+            height: 50px;
+            position: absolute;
+            background-color: #8B4513;
+            border: 1px solid #000;
+        }
+        #inventory {
+            display: flex;
+            flex-wrap: wrap;
+            width: 200px;
+            border: 2px solid #333;
+            background-color: #fff;
+            padding: 10px;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+        .inventory-slot {
+            width: 40px;
+            height: 40px;
+            border: 1px solid #000;
+            margin: 2px;
+            background-color: #f0f0f0;
+        }
+        #craftingArea {
+            display: flex;
+            flex-direction: column;
+            margin-top: 10px;
+        }
+        .crafting-slot {
+            width: 40px;
+            height: 40px;
+            border: 1px solid #000;
+            margin: 2px;
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameArea"></div>
+    <div id="inventory"></div>
+    <script>
+        const gameArea = document.getElementById('gameArea');
+        const inventory = document.getElementById('inventory');
+        const blocks = [];
+        const inventoryItems = [];
+        const blockTypes = ['dirt', 'stone', 'wood'];
+
+        function createBlock(x, y, type) {
+            const block = document.createElement('div');
+            block.className = 'block';
+            block.style.left = x + 'px';
+            block.style.top = y + 'px';
+            block.dataset.type = type;
+            gameArea.appendChild(block);
+            blocks.push(block);
+        }
+
+        function initializeBlocks() {
+            for (let i = 0; i < 10; i++) {
+                for (let j = 0; j < 10; j++) {
+                    createBlock(i * 50, j * 50, blockTypes[Math.floor(Math.random() * blockTypes.length)]);
+                }
+            }
+        }
+
+        function breakBlock(event) {
+            const x = Math.floor(event.clientX / 50) * 50;
+            const y = Math.floor(event.clientY / 50) * 50;
+            const block = blocks.find(b => b.style.left === x + 'px' && b.style.top === y + 'px');
+            if (block) {
+                const type = block.dataset.type;
+                inventoryItems.push(type);
+                inventory.innerHTML += `<div class="inventory-slot">${type}</div>`;
+                gameArea.removeChild(block);
+                blocks.splice(blocks.indexOf(block), 1);
+            }
+        }
+
+        function openInventory(event) {
+            if (event.key === 'e') {
+                inventory.style.display = inventory.style.display === 'none' ? 'flex' : 'none';
+            }
+        }
+
+        document.addEventListener('click', breakBlock);
+        document.addEventListener('keydown', openInventory);
+        initializeBlocks();
+    </script>
+</body>
+</html>
