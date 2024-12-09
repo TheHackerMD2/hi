@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecrafty Simulator</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #inventory {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid #000;
+            padding: 10px;
+            display: none;
+        }
+        .item {
+            width: 50px;
+            height: 50px;
+            border: 1px solid #000;
+            display: inline-block;
+            margin: 5px;
+            background-color: #ccc;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="inventory">
+        <div class="item" id="block1"></div>
+        <div class="item" id="block2"></div>
+        <div class="item" id="block3"></div>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let inventoryOpen = false;
+        const blocks = [];
+        const blockTypes = ['#8B4513', '#FFD700', '#228B22'];
+
+        class Block {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.size = 50;
+            }
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+            }
+        }
+
+        function createBlocks() {
+            for (let i = 0; i < 10; i++) {
+                for (let j = 0; j < 10; j++) {
+                    const color = blockTypes[Math.floor(Math.random() * blockTypes.length)];
+                    blocks.push(new Block(i * 50, j * 50, color));
+                }
+            }
+        }
+
+        function drawScene() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            blocks.forEach(block => block.draw());
+        }
+
+        function breakBlock(x, y) {
+            const index = blocks.findIndex(block => block.x === x && block.y === y);
+            if (index !== -1) {
+                blocks.splice(index, 1);
+            }
+        }
+
+        canvas.addEventListener('click', (event) => {
+            const x = Math.floor(event.clientX / 50) * 50;
+            const y = Math.floor(event.clientY / 50) * 50;
+            breakBlock(x, y);
+            drawScene();
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'e') {
+                inventoryOpen = !inventoryOpen;
+                document.getElementById('inventory').style.display = inventoryOpen ? 'block' : 'none';
+            }
+        });
+
+        createBlocks();
+        drawScene();
+    </script>
+</body>
+</html>
