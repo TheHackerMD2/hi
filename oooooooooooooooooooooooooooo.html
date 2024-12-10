@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Simulator</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #87CEEB;
+        }
+        canvas {
+            display: block;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 10px;
+            height: 10px;
+            background: red;
+            border-radius: 50%;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="crosshair"></div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Game variables
+        const blockSize = 50;
+        const gravity = 0.5;
+        const jumpHeight = 15;
+        const moveSpeed = 5;
+        const lookSpeed = 0.005;
+        const viewDistance = 100;
+        let falling = false;
+        
+        const player = {
+            x: 0,
+            y: 200,
+            z: 0,
+            rotationY: 0,
+            rotationX: 0,
+            velocityY: 0,
+            inventory: [],
+            lookingAtBlock: null,
+        };
+
+        const keys = {};
+        const blocks = [];
+        const droppedItems = [];
+
+        // Generate a flat terrain with blocks
+        function generateTerrain() {
+            for (let x = -5; x <= 5; x++) {
+                for (let z = -5; z <= 5; z++) {
+                    blocks.push({
+                        x: x * blockSize,
+                        y: 0,
+                        z: z * blockSize,
+                        type: 'grass',
+                    });
+                    if (Math.random() < 0.2) {
+                        generateTree(x * blockSize, z * blockSize);
+                    }
+                }
+            }
+        }
+
+        function generateTree(baseX, baseZ) {
+            // Add a simple tree with trunk and leaves
+            for (let y = 1; y <= 3; y++) {
+                blocks.push({
+                    x: baseX,
+                    y: y * blockSize,
+                    z: baseZ,
+                    type: 'wood',
+                });
+            }
+            for (let x = -1; x <= 1; x++) {
+                for (let z = -1; z <= 1; z++) {
+                    blocks.push({
+                        x: baseX + x * blockSize,
+                        y: 4 * blockSize,
+                        z: baseZ + z * blockSize,
+                        type: 'leaves',
+                    });
+                }
+            }
+        }
+
+        // Render the game world
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            blocks.forEach(block => {
+                const screenX = block.x - player.x + canvas.width / 2;
+                const screenY = block.y - player.y + canvas.height / 2;
+                const screenZ = block.z - player.z;
+                const scale = Math.max(0, viewDistance / screenZ);
+                ctx.fillStyle = block.type === 'grass' ? 'green' : block.type === 'wood' ? 'brown' : 'lime';
+                ctx.fillRect(screenX * scale, screenY * scale, blockSize * scale, blockSize * scale);
+            });
+
+            droppedItems.forEach(item => {
+                ctx.fillStyle = 'orange';
+                const screenX = item.x - player.x + canvas.width / 2;
+                const screenY = item.y - player.y + canvas.height / 2;
+                const screenZ = item.z - player.z;
+                const scale = Math.max(0, viewDistance / screenZ);
+                ctx.fillRect(screenX * scale, screenY * scale, blockSize / 2 * scale, blockSize / 2 * scale);
+            });
+        }
+
+        // Handle movement, gravity, and physics
+        function update() {
+            // Gravity
+            if (falling) {
+                player.velocityY += gravity;
+                player.y += player.velocityY;
+                if (player.y > 200) {
+                    player.y = 200;
+                    player.velocityY = 0;
+                    falling = false;
+                }
+            }
+
+            // Movement
+            if (keys['w']) player.z -= moveSpeed;
+            if (keys['s']) player.z += moveSpeed;
+            if (keys['a']) player.x -= moveSpeed;
+            if (keys['d']) player.x += moveSpeed;
+            if (keys[' ']) {
+                if (!falling) {
+                    player.velocityY = -jumpHeight;
+                    falling = true;
+                }
+            }
+
+            // Update crosshair and perspective
+            player.rotationY += (mouseX - canvas.width / 2) * lookSpeed;
+            player.rotationX -= (mouseY - canvas.height / 2) * lookSpeed;
+            mouseX = canvas.width / 2;
+            mouseY = canvas.height / 2;
+
+            render();
+            requestAnimationFrame(update);
+        }
+
+        // Handle mouse movement for view rotation
+        let mouseX = canvas.width / 2;
+        let mouseY = canvas.height / 2;
+        canvas.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+
+        // Key events
+        window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+        window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
+
+        // Mouse click events for breaking and placing blocks
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 0) {
+                // Left click to break block
+                breakBlock();
+            } else if (e.button === 2) {
+                // Right click to place block
+                placeBlock();
+            }
+        });
+
+        function breakBlock() {
+            // Find a block in front of the player and remove it
+            const block = getBlockInFront();
+            if (block) {
+                blocks.splice(blocks.indexOf(block), 1);
+                droppedItems.push({
+                    x: block.x,
+                    y: block.y + 5,
+                    z: block.z,
+                    type: block.type
+                });
+            }
+        }
+
+        function placeBlock() {
+            // Place a block in front of the player
+            const block = {
+                x: player.x + Math.sin(player.rotationY) * blockSize,
+                y: player.y,
+                z: player.z + Math.cos(player.rotationY) * blockSize,
+                type: 'grass'
+            };
+            blocks.push(block);
+        }
+
+        function getBlockInFront() {
+            const rayDirection = {
+                x: Math.sin(player.rotationY),
+                y: 0,
+                z: Math.cos(player.rotationY)
+            };
+            for (let i = 0; i < 50; i++) {
+                const x = player.x + rayDirection.x * i * blockSize;
+                const y = player.y;
+                const z = player.z + rayDirection.z * i * blockSize;
+                for (let block of blocks) {
+                    if (block.x === x && block.y === y && block.z === z) {
+                        return block;
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Initialize game
+        generateTerrain();
+        update();
+    </script>
+</body>
+</html>
