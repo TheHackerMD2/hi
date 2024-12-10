@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Simulator</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #87CEEB;
+        }
+        canvas {
+            display: block;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 10px;
+            height: 10px;
+            background: red;
+            border-radius: 50%;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="crosshair"></div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        // Game variables
+        const blockSize = 1;
+        const moveSpeed = 0.1;
+        const jumpHeight = 0.3;
+        const gravity = 0.01;
+        let falling = false;
+        let velocityY = 0;
+
+        let blocks = [];
+        let droppedItems = [];
+        let inventory = [];
+        let player = { x: 0, y: 1, z: 0, rotationY: 0, rotationX: 0 };
+
+        // Block types
+        const blockTypes = ['grass', 'stone', 'dirt', 'wood', 'ore'];
+        const blockTextures = {
+            grass: 'https://threejs.org/examples/textures/terrain/grasslight-big.jpg',
+            stone: 'https://threejs.org/examples/textures/terrain/stone-01.jpg',
+            dirt: 'https://threejs.org/examples/textures/terrain/dirt-01.jpg',
+            wood: 'https://threejs.org/examples/textures/terrain/wood.jpg',
+            ore: 'https://threejs.org/examples/textures/terrain/stone-02.jpg'
+        };
+
+        // Setup scene
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(0, 5, 5).normalize();
+        scene.add(light);
+
+        // Create a basic cube geometry for blocks
+        const blockGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
+        let blockMaterials = {
+            grass: new THREE.MeshBasicMaterial({ map: new THREE.TextureLoader().load(blockTextures.grass) }),
+            stone: new THREE.MeshBasicMaterial({ map: new THREE.TextureLoader().load(blockTextures.stone) }),
+            dirt: new THREE.MeshBasicMaterial({ map: new THREE.TextureLoader().load(blockTextures.dirt) }),
+            wood: new THREE.MeshBasicMaterial({ map: new THREE.TextureLoader().load(blockTextures.wood) }),
+            ore: new THREE.MeshBasicMaterial({ map: new THREE.TextureLoader().load(blockTextures.ore) })
+        };
+
+        // Procedural terrain generation (randomized blocks)
+        function generateTerrain() {
+            for (let x = -5; x < 5; x++) {
+                for (let z = -5; z < 5; z++) {
+                    const y = 0; // Ground level
+                    const blockType = blockTypes[Math.floor(Math.random() * blockTypes.length)];
+                    const block = new THREE.Mesh(blockGeometry, blockMaterials[blockType]);
+                    block.position.set(x * blockSize, y, z * blockSize);
+                    scene.add(block);
+                    blocks.push({ x: x * blockSize, y: y, z: z * blockSize, type: blockType });
+                }
+            }
+        }
+
+        // Physics - handle player movement and gravity
+        function updatePlayer() {
+            if (keys['w']) player.z -= moveSpeed;
+            if (keys['s']) player.z += moveSpeed;
+            if (keys['a']) player.x -= moveSpeed;
+            if (keys['d']) player.x += moveSpeed;
+            if (keys[' ']) {
+                if (!falling) {
+                    velocityY = jumpHeight;
+                    falling = true;
+                }
+            }
+
+            velocityY -= gravity;
+            player.y += velocityY;
+
+            if (player.y <= 1) {  // Player hits the ground
+                player.y = 1;
+                velocityY = 0;
+                falling = false;
+            }
+
+            camera.position.set(player.x, player.y, player.z);
+        }
+
+        // Detect collisions (very basic collision detection for demonstration)
+        function checkCollisions() {
+            for (let block of blocks) {
+                if (Math.abs(player.x - block.x) < blockSize && Math.abs(player.z - block.z) < blockSize && Math.abs(player.y - block.y) < blockSize) {
+                    if (player.y <= block.y + blockSize && velocityY < 0) {
+                        velocityY = 0;
+                        falling = false;
+                        player.y = block.y + blockSize;
+                    }
+                }
+            }
+        }
+
+        // Mouse controls for view rotation
+        let mouseX = 0, mouseY = 0;
+        canvas.addEventListener('mousemove', function (event) {
+            mouseX = event.clientX - window.innerWidth / 2;
+            mouseY = event.clientY - window.innerHeight / 2;
+            player.rotationY += mouseX * 0.005;
+            player.rotationX -= mouseY * 0.005;
+            camera.rotation.set(player.rotationX, player.rotationY, 0);
+        });
+
+        // Key events for player movement
+        const keys = {};
+        window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+        window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
+
+        // Handle block interactions (breaking and placing blocks)
+        canvas.addEventListener('mousedown', function (e) {
+            if (e.button === 0) { // Left click to break block
+                breakBlock();
+            } else if (e.button === 2) { // Right click to place block
+                placeBlock();
+            }
+        });
+
+        function breakBlock() {
+            const block = getBlockInFront();
+            if (block) {
+                blocks = blocks.filter(b => b !== block);
+                droppedItems.push({ x: block.x, y: block.y + 1, z: block.z, type: block.type });
+            }
+        }
+
+        function placeBlock() {
+            const block = new THREE.Mesh(blockGeometry, blockMaterials['grass']);
+            block.position.set(player.x + Math.sin(player.rotationY) * blockSize, player.y, player.z + Math.cos(player.rotationY) * blockSize);
+            scene.add(block);
+            blocks.push({ x: block.position.x, y: block.position.y, z: block.position.z, type: 'grass' });
+        }
+
+        function getBlockInFront() {
+            const rayDirection = { x: Math.sin(player.rotationY), y: 0, z: Math.cos(player.rotationY) };
+            for (let i = 0; i < 5; i++) {
+                const x = player.x + rayDirection.x * i * blockSize;
+                const y = player.y;
+                const z = player.z + rayDirection.z * i * blockSize;
+                for (let block of blocks) {
+                    if (Math.abs(block.x - x) < blockSize && Math.abs(block.z - z) < blockSize) {
+                        return block;
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Drop items and make them collectible
+        function dropItems() {
+            for (let item of droppedItems) {
+                const itemMesh = new THREE.Mesh(blockGeometry, blockMaterials[item.type]);
+                itemMesh.position.set(item.x, item.y, item.z);
+                scene.add(itemMesh);
+            }
+        }
+
+        // Update loop
+        function animate() {
+            updatePlayer();
+            checkCollisions();
+            dropItems();
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+
+        // Initialize and start the game
+        generateTerrain();
+        animate();
+
+    </script>
+</body>
+</html>
