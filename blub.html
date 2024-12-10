@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Simulator</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        #inventory {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #inventory div {
+            width: 50px;
+            height: 50px;
+            border: 2px solid white;
+            background: gray;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            transform: translate(-50%, -50%);
+            background: red;
+            border-radius: 50%;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="inventory"></div>
+    <div id="crosshair"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r135/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon-es/0.18.0/cannon-es.min.js"></script>
+    <script>
+        // Scene, Camera, Renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Physics world
+        const world = new CANNON.World();
+        world.gravity.set(0, -9.82, 0);
+
+        // Player
+        const player = {
+            body: new CANNON.Body({
+                mass: 1,
+                shape: new CANNON.Sphere(0.5),
+            }),
+            speed: 5,
+            jumpImpulse: 5,
+            onGround: false,
+        };
+        world.addBody(player.body);
+        camera.position.set(0, 2, 5);
+
+        // Ground
+        const ground = new CANNON.Body({
+            mass: 0,
+            shape: new CANNON.Plane(),
+        });
+        ground.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+        world.addBody(ground);
+
+        const groundMesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(50, 50),
+            new THREE.MeshStandardMaterial({ color: 0x00ff00 })
+        );
+        groundMesh.rotation.x = -Math.PI / 2;
+        scene.add(groundMesh);
+
+        // Lighting
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(10, 10, 10);
+        scene.add(light);
+
+        // Controls
+        const keys = {};
+        document.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+        document.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
+
+        function updatePlayerMovement(delta) {
+            if (keys['w']) player.body.position.z -= player.speed * delta;
+            if (keys['s']) player.body.position.z += player.speed * delta;
+            if (keys['a']) player.body.position.x -= player.speed * delta;
+            if (keys['d']) player.body.position.x += player.speed * delta;
+            if (keys[' '] && player.onGround) {
+                player.body.velocity.y = player.jumpImpulse;
+                player.onGround = false;
+            }
+        }
+
+        // Mouse movement
+        let mouseX = 0, mouseY = 0;
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.movementX * 0.005;
+            mouseY = e.movementY * 0.005;
+            camera.rotation.y -= mouseX;
+            camera.rotation.x -= mouseY;
+        });
+
+        // Items
+        const inventory = [];
+        function addToInventory(item) {
+            inventory.push(item);
+            renderInventory();
+        }
+
+        function renderInventory() {
+            const inventoryDiv = document.getElementById('inventory');
+            inventoryDiv.innerHTML = '';
+            inventory.forEach(item => {
+                const itemDiv = document.createElement('div');
+                inventoryDiv.appendChild(itemDiv);
+            });
+        }
+
+        // Game loop
+        const clock = new THREE.Clock();
+        function animate() {
+            const delta = clock.getDelta();
+            world.step(1 / 60);
+            updatePlayerMovement(delta);
+
+            // Sync player body with camera
+            camera.position.copy(player.body.position);
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+        animate();
+    </script>
+</body>
+</html>
